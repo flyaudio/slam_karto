@@ -422,6 +422,8 @@ SlamKarto::getLaser(const sensor_msgs::LaserScan::ConstPtr& scan)
   return lasers_[scan->header.frame_id];
 }
 
+
+//??
 bool
 SlamKarto::getOdomPose(karto::Pose2& karto_pose, const ros::Time& t)
 {
@@ -662,7 +664,7 @@ SlamKarto::addScan(karto::LaserRangeFinder* laser,
   if (lasers_inverted_[scan->header.frame_id]) {
     for(std::vector<float>::const_reverse_iterator it = scan->ranges.rbegin();
       it != scan->ranges.rend();
-      ++it)
+      ++it)//reverse iterator
     {
       readings.push_back(*it);
     }
