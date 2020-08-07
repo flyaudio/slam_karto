@@ -145,7 +145,7 @@ SlamKarto::SlamKarto() :
     // Compatibility with slam_gmapping, which uses "delta" to mean
     // resolution
     if(!private_nh_.getParam("delta", resolution_))
-      resolution_ = 0.05;
+      resolution_ = 0.05;//默认
   }
   double transform_publish_period;
   private_nh_.param("transform_publish_period", transform_publish_period, 0.05);
