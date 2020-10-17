@@ -366,7 +366,7 @@ SlamKarto::getLaser(const sensor_msgs::LaserScan::ConstPtr& scan)
     }
 
     double yaw = tf::getYaw(laser_pose.getRotation());
-
+//这个是固定的,why每次都打印??
     ROS_INFO("laser %s's pose wrt base: %.3f %.3f %.3f",
 	     scan->header.frame_id.c_str(),
 	     laser_pose.getOrigin().x(),
