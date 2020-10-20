@@ -76,6 +76,7 @@ class SlamKarto
 
     // ROS handles
     ros::NodeHandle node_;
+	// 接收tf进行pose转换
     tf::TransformListener tf_;
     tf::TransformBroadcaster* tfB_;
     message_filters::Subscriber<sensor_msgs::LaserScan>* scan_filter_sub_;
@@ -109,7 +110,7 @@ class SlamKarto
     bool got_map_;
     int laser_count_;
     boost::thread* transform_thread_;
-    tf::Transform map_to_odom_;
+    tf::Transform map_to_odom_;//odom_T_map
     unsigned marker_count_;
     bool inverted_laser_;
 };
@@ -340,10 +341,16 @@ SlamKarto::publishTransform()
   tfB_->sendTransform(tf::StampedTransform (map_to_odom_, tf_expiration, map_frame_, odom_frame_));
 }
 
+/*
+1.判断时间戳
+2.判断是否同一个laser
+3.判断正/反安装
+*/
 karto::LaserRangeFinder*
 SlamKarto::getLaser(const sensor_msgs::LaserScan::ConstPtr& scan)
 {
   // Check whether we know about this laser yet
+  // new timestamp or not
   if(lasers_.find(scan->header.frame_id) == lasers_.end())
   {
     // New laser; need to create a Karto device for it.
@@ -390,7 +397,7 @@ SlamKarto::getLaser(const sensor_msgs::LaserScan::ConstPtr& scan)
       ROS_WARN("Unable to determine orientation of laser: %s", e.what());
       return NULL;
     }
-
+    // NOT IN USE
     bool inverse = lasers_inverted_[scan->header.frame_id] = up.z() <= 0;
     if (inverse)
       ROS_INFO("laser is mounted upside-down");
@@ -398,6 +405,7 @@ SlamKarto::getLaser(const sensor_msgs::LaserScan::ConstPtr& scan)
 
     // Create a laser range finder device and copy in data from the first
     // scan
+    //对于同一个laser,没必要吧
     std::string name = scan->header.frame_id;
     karto::LaserRangeFinder* laser = 
       karto::LaserRangeFinder::CreateLaserRangeFinder(karto::LaserRangeFinder_Custom, karto::Name(name));
@@ -431,6 +439,8 @@ SlamKarto::getOdomPose(karto::Pose2& karto_pose, const ros::Time& t)
   tf::Stamped<tf::Transform> odom_pose;
   try
   {
+    //base_frame_下的pose转换到 odom_frame_下的pose
+    //ident 中必须指明源pose属于哪个frame
     tf_.transformPose(odom_frame_, ident, odom_pose);
   }
   catch(tf::TransformException e)
@@ -490,6 +500,7 @@ SlamKarto::publishGraphVisualization()
 
   m.action = visualization_msgs::Marker::ADD;
   uint id = 0;
+  //why间隔不是4??
   for (uint i=0; i<graph.size()/2; i+=2) 
   {
     m.id = id;
@@ -540,6 +551,7 @@ SlamKarto::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scan)
   static ros::Time last_map_update(0,0);
 
   // Check whether we know about this laser yet
+  // 主要是检查timestamp
   karto::LaserRangeFinder* laser = getLaser(scan);
 
   if(!laser)
@@ -560,6 +572,7 @@ SlamKarto::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scan)
     publishGraphVisualization();
 
     if(!got_map_ || 
+		//map更新频率
        (scan->header.stamp - last_map_update) > map_update_interval_)
     {
       if(updateMap())
@@ -572,6 +585,7 @@ SlamKarto::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scan)
   }
 }
 
+//根据mapper_->m_pMapperSensorManager存储的scans,重新绘制grid map
 bool
 SlamKarto::updateMap()
 {
@@ -647,7 +661,12 @@ SlamKarto::updateMap()
 
   return true;
 }
-
+/**
+ * 
+ * @param  in
+ * @param  out  karto_pose(是上一帧的pose??)
+ * @return bool processed
+ */
 bool
 SlamKarto::addScan(karto::LaserRangeFinder* laser,
 		   const sensor_msgs::LaserScan::ConstPtr& scan, 
@@ -686,10 +705,11 @@ SlamKarto::addScan(karto::LaserRangeFinder* laser,
   if((processed = mapper_->Process(range_scan)))
   {
     //std::cout << "Pose: " << range_scan->GetOdometricPose() << " Corrected Pose: " << range_scan->GetCorrectedPose() << std::endl;
-    
+    //world_T_robot
     karto::Pose2 corrected_pose = range_scan->GetCorrectedPose();
 
     // Compute the map->odom transform
+    //map_T_odom
     tf::Stamped<tf::Pose> odom_to_map;
     try
     {
